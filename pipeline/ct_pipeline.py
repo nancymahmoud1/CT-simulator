@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 from core.phantom import generate_phantom
 from core.projection import compute_sinogram
-from core.noise import add_poisson_noise
+from core.noise_model import add_poisson_noise
 from core.reconstruction import reconstruct_fbp, reconstruct_sart
 from core.metrics import compute_rmse, compute_ssim
 
