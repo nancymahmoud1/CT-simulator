@@ -28,6 +28,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from ui.noise_dose_tab import NoiseDoseTab
 
 # ─────────────────────────────────────────────
 #  DARK THEME STYLESHEET
@@ -631,6 +632,10 @@ class CTSimApp(QMainWindow):
         t5.addWidget(self.canvas_diff)
         self.tabs.addTab(self.tab_diff, "◎ Difference Map")
 
+        # ── Noise & Dose tab (your task) ──────
+        self.noise_tab = NoiseDoseTab(parent=self)
+        self.tabs.addTab(self.noise_tab, "📉 Noise & Dose")
+
         layout.addWidget(self.tabs)
 
         opts_frame = QFrame()
@@ -769,6 +774,12 @@ class CTSimApp(QMainWindow):
         self.run_btn.setEnabled(True)
         self.status_label.setText("Simulation complete ✓")
         self._update_displays(results)
+
+        # ── Feed the clean sinogram + phantom into the Noise & Dose tab ──
+        self.noise_tab.set_sinogram(
+            results["sinogram_clean"],
+            phantom=results["phantom"],
+        )
 
     def _on_error(self, msg):
         self.run_btn.setEnabled(True)
