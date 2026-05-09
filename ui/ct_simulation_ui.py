@@ -475,21 +475,6 @@ class CTSimApp(QMainWindow):
         inner_layout.addWidget(self.angles_slider)
         self._add_range_labels(inner_layout, "30", "360")
 
-        inner_layout.addWidget(QLabel("Detector Elements"))
-        det_row = QHBoxLayout()
-        self.det_spin = QSpinBox()
-        self.det_spin.setRange(64, 512)
-        self.det_spin.setValue(256)
-        det_row.addWidget(self.det_spin)
-        inner_layout.addLayout(det_row)
-        self.det_slider = QSlider(Qt.Horizontal)
-        self.det_slider.setRange(64, 512)
-        self.det_slider.setValue(256)
-        self.det_slider.valueChanged.connect(self.det_spin.setValue)
-        self.det_spin.valueChanged.connect(self.det_slider.setValue)
-        inner_layout.addWidget(self.det_slider)
-        self._add_range_labels(inner_layout, "64", "512")
-
         # ── 3. NOISE ──
         inner_layout.addWidget(SectionHeader(3, "Noise / Dose Settings"))
 
@@ -611,13 +596,6 @@ class CTSimApp(QMainWindow):
         t2.addWidget(self.canvas_sino)
         self.tabs.addTab(self.tab_sino, "⚟ Sinogram")
 
-        self.tab_noisy = QWidget()
-        t3 = QVBoxLayout(self.tab_noisy)
-        t3.setContentsMargins(4, 4, 4, 4)
-        self.canvas_noisy = MplCanvas(6, 4, 90)
-        t3.addWidget(self.canvas_noisy)
-        self.tabs.addTab(self.tab_noisy, "◈ Noisy Sinogram")
-
         self.tab_recon = QWidget()
         t4 = QVBoxLayout(self.tab_recon)
         t4.setContentsMargins(4, 4, 4, 4)
@@ -699,7 +677,7 @@ class CTSimApp(QMainWindow):
         self.info_gt      = info_row(0, "Ground Truth",       "Shepp–Logan Phantom")
         self.info_method  = info_row(1, "Reconstruction",     "FBP (Filtered Back-Projection)")
         self.info_mas     = info_row(2, "mAs (Dose)",         "20")
-        self.info_angles  = info_row(3, "Angles / Detectors", "180 / 256")
+        self.info_angles  = info_row(3, "Angles",             "180")
         layout.addWidget(info_frame)
 
         div = QFrame(); div.setObjectName("divider")
@@ -752,7 +730,7 @@ class CTSimApp(QMainWindow):
         params = {
             "image_size":      self._get_image_size(),
             "n_angles":        self.angles_spin.value(),
-            "n_detectors":     self.det_spin.value(),
+            "n_detectors":     256,
             "mas":             self.mas_spin.value(),
             "add_noise":       self.noise_check.isChecked(),
             "method":          self._get_method(),
@@ -819,19 +797,6 @@ class CTSimApp(QMainWindow):
         self.canvas_sino.fig.tight_layout(pad=1.5)
         self.canvas_sino.draw()
 
-        # ── Noisy Sinogram tab ──
-        self.canvas_noisy.fig.clear()
-        ax1 = self.canvas_noisy.fig.add_subplot(121)
-        ax2 = self.canvas_noisy.fig.add_subplot(122)
-        self.canvas_noisy.fig.patch.set_facecolor('#0d1117')
-        imshow_ax(ax1, r["sinogram_noisy"].T, f"Sinogram (Noisy) | mAs = {r['mas']}", cmap=cmap,
-                  xlabel="Detector Position", ylabel="Projection Angle (°)")
-        diff_sino = r["sinogram_noisy"] - r["sinogram_clean"]
-        imshow_ax(ax2, diff_sino.T, "Noise Component", cmap="seismic",
-                  xlabel="Detector Position")
-        self.canvas_noisy.fig.tight_layout(pad=1.5)
-        self.canvas_noisy.draw()
-
         # ── Reconstruction tab ──
         self.canvas_recon.fig.clear()
         ax1 = self.canvas_recon.fig.add_subplot(121)
@@ -851,7 +816,8 @@ class CTSimApp(QMainWindow):
         imshow_ax(ax1, r["phantom"], "Ground Truth", cmap=cmap)
         imshow_ax(ax2, r["recon"],   f"{r['method']} Recon", cmap=cmap)
         imshow_ax(ax3, np.abs(r["diff"]), "Error Map", cmap="inferno")
-        self.canvas_diff.fig.tight_layout(pad=1.5)
+        self.canvas_diff.fig.tight_layout(pad=0.5)
+        self.canvas_diff.fig.subplots_adjust(wspace=0.08)
         self.canvas_diff.draw()
 
         # ── Metrics ──
@@ -861,7 +827,7 @@ class CTSimApp(QMainWindow):
         self.ssim_card.set_value(f"{ssim_val:.4f}")
         self.info_method.setText(r["method"] + (" (Filtered Back-Projection)" if r["method"] == "FBP" else " (Algebraic)"))
         self.info_mas.setText(str(r["mas"]))
-        self.info_angles.setText(f"{r['n_angles']} / {r['n_detectors']}")
+        self.info_angles.setText(str(r["n_angles"]))
 
         # ── Sweep chart ──
         self.canvas_sweep.fig.clear()
@@ -924,14 +890,13 @@ class CTSimApp(QMainWindow):
         self.phantom_combo.setCurrentIndex(0)
         self.size_combo.setCurrentIndex(1)
         self.angles_slider.setValue(180)
-        self.det_slider.setValue(256)
         self.mas_slider.setValue(20)
         self.noise_check.setChecked(True)
         self.method_combo.setCurrentIndex(0)
         self.iter_slider.setValue(20)
         self.progress_bar.setValue(0)
         self.status_label.setText("Ready")
-        for c in [self.canvas_phantom, self.canvas_sino, self.canvas_noisy,
+        for c in [self.canvas_phantom, self.canvas_sino,
                   self.canvas_recon,   self.canvas_diff,
                   self.canvas_sweep,   self.canvas_compare]:
             c.clear()
@@ -947,10 +912,10 @@ class CTSimApp(QMainWindow):
         if not path:
             return
         r = self._results
-        fig, axes = plt.subplots(2, 3, figsize=(15, 10), facecolor='#0d1117')
-        titles = ["Original Phantom", "Sinogram (Clean)", "Noisy Sinogram",
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10), facecolor='#0d1117')
+        titles = ["Original Phantom", "Sinogram (Clean)",
                   f"Reconstruction ({r['method']})", "Error Map", "Metrics"]
-        imgs   = [r["phantom"], r["sinogram_clean"].T, r["sinogram_noisy"].T,
+        imgs   = [r["phantom"], r["sinogram_clean"].T,
                   r["recon"],   np.abs(r["diff"]),     None]
         for ax, img, title in zip(axes.flat, imgs, titles):
             ax.set_facecolor('#0d1117')
